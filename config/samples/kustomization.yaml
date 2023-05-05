@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- cache_v1alpha1_playop.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

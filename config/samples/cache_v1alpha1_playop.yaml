@@ -1,0 +1,13 @@
+apiVersion: cache.example.com/v1alpha1
+kind: PlayOp
+metadata:
+  labels:
+    app.kubernetes.io/name: playop
+    app.kubernetes.io/instance: playop-sample
+    app.kubernetes.io/part-of: play-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: play-operator
+  name: playop-sample
+spec:
+  # TODO(user): Add fields here
+  size: 5
