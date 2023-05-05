@@ -20,12 +20,6 @@ rules:
 - apiGroups:
   - cache.example.com
   resources:
-  - playops/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - cache.example.com
-  resources:
   - playops/status
   verbs:
   - get

@@ -19,7 +19,10 @@ package controller
 import (
 	"context"
 	"fmt"
+	"math"
+	"math/rand"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -48,7 +51,6 @@ type PlayOpReconciler struct {
 
 //+kubebuilder:rbac:groups=cache.example.com,resources=playops,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cache.example.com,resources=playops/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=cache.example.com,resources=playops/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -106,15 +108,19 @@ func (r *PlayOpReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	podNames := getPodNames(podList.Items)
 	podsCount := len(podList.Items)
 	size := playop.Spec.Size
+	countDiff := int(math.Abs(float64(podsCount - int(size))))
+	// Init the Seed function to generate a different string each time
+	rand.Seed(time.Now().Unix())
 	if podsCount < int(size) {
 		// Create new pods to match the size value
 		log.Info("Pods count less than expected", "Expected", size, "Found", podsCount)
 
-		for i := podsCount; i < int(size); i++ {
+		for i := 0; i < countDiff; i++ {
 			// Define new pod
-			pod, err := r.podForPlayOp(playop, i)
+			pod, err := r.podForPlayOp(playop)
 			if err != nil {
 				log.Error(err, "Failed to define new pod for PlayOp")
 				meta.SetStatusCondition(&playop.Status.Conditions, metav1.Condition{
@@ -145,9 +151,9 @@ func (r *PlayOpReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		// Delete extra pods to match the size value
 		log.Info("Pods count more than expected", "Expected", size, "Found", podsCount)
 
-		for i := podsCount - 1; i >= int(size); i-- {
+		for i := 0; i < countDiff; i++ {
 			pod := &corev1.Pod{}
-			podToBeDeletedName := fmt.Sprintf("%v-pod-%v", playop.Name, i)
+			podToBeDeletedName := podNames[i]
 			// Verify pod exists
 			err = r.Get(ctx, types.NamespacedName{Name: podToBeDeletedName, Namespace: playop.Namespace}, pod)
 			if err != nil {
@@ -183,7 +189,6 @@ func (r *PlayOpReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		Message: fmt.Sprintf("Pods for custom resource (%s) created/deleted successfully", playop.Name),
 	})
 
-	podNames := getPodNames(podList.Items)
 	playop.Status.Pods = podNames
 
 	if err = r.Status().Update(ctx, playop); err != nil {
@@ -194,12 +199,24 @@ func (r *PlayOpReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
+func generatePodName() string {
+	letters := []byte("abcdefghijklmnopqrstuvwxyz")
+
+	ran_str := make([]byte, 4)
+	for i := 0; i < 4; i++ {
+		ran_str[i] = letters[rand.Intn(len(letters))]
+	}
+
+	str := string(ran_str)
+	return str
+}
+
 // updatePodsCount updates the pods count in the namespace based on the countDiff,
 // where if countDiff < 0 then existing pods count is more than expected value and
 // if countDiff > 0 then exiting pods count is less than expected value
-func (r *PlayOpReconciler) podForPlayOp(playop *cachev1alpha1.PlayOp, count int) (*corev1.Pod, error) {
+func (r *PlayOpReconciler) podForPlayOp(playop *cachev1alpha1.PlayOp) (*corev1.Pod, error) {
 	ls := labelsForPlayOpPods(playop.Name)
-	podName := fmt.Sprintf("%v-pod-%v", playop.Name, count)
+	podName := fmt.Sprintf("pod-%v", generatePodName())
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
